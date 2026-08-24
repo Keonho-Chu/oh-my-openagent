@@ -11736,10 +11736,15 @@
             "auto_commit": {
               "default": true,
               "type": "boolean"
+            },
+            "auto_merge": {
+              "default": true,
+              "type": "boolean"
             }
           },
           "required": [
-            "auto_commit"
+            "auto_commit",
+            "auto_merge"
           ],
           "additionalProperties": false
         },
@@ -11749,10 +11754,15 @@
             "auto_commit": {
               "default": true,
               "type": "boolean"
+            },
+            "auto_merge": {
+              "default": true,
+              "type": "boolean"
             }
           },
           "required": [
-            "auto_commit"
+            "auto_commit",
+            "auto_merge"
           ],
           "additionalProperties": false
         },
@@ -26490,10 +26500,15 @@
                   "auto_commit": {
                     "default": true,
                     "type": "boolean"
+                  },
+                  "auto_merge": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 },
                 "required": [
-                  "auto_commit"
+                  "auto_commit",
+                  "auto_merge"
                 ],
                 "additionalProperties": false
               },
@@ -26503,10 +26518,15 @@
                   "auto_commit": {
                     "default": true,
                     "type": "boolean"
+                  },
+                  "auto_merge": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 },
                 "required": [
-                  "auto_commit"
+                  "auto_commit",
+                  "auto_merge"
                 ],
                 "additionalProperties": false
               },
