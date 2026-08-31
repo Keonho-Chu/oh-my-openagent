@@ -18,7 +18,7 @@ import { migrateLegacyBunGlobalManifest } from "./bin/lib/legacy-bun-global-migr
 import { adoptLegacyFlatState, canonicalAgentDir } from "./bin/lib/agent-dir.js"
 import { propagateResult, runChild } from "./bin/lib/child-process.js"
 import { nearestNodeBin, readJson } from "./bin/lib/package-paths.js"
-import { runDoctor } from "./bin/lib/doctor.js"
+import { reapStaleEngines, runDoctor } from "./bin/lib/doctor.js"
 import { detectHarnesses, needsSetupSuggestion } from "./bin/lib/setup-detect.js"
 import { runSetup } from "./bin/lib/setup-import.js"
 import { delimiter } from "node:path"
@@ -129,6 +129,7 @@ export type ChildResult = { status: number | null; signal: NodeJS.Signals | null
 export interface CompiledLauncherOptions {
   spawnToolkit?: (target: ToolkitSpawnTarget) => Promise<ChildResult>
   runSetup?: (args: string[]) => Promise<void>
+  doctor?: { list?: () => unknown[]; kill?: (pid: number, signal: string) => void }
 }
 
 // The compiled binary is not a JS runtime: under `bun build --compile`, `process.execPath` names omo
@@ -192,9 +193,16 @@ export async function runCompiledLauncher(
     return true
   }
   if (command === "doctor") {
+    // An explicit reap names pids and nothing else; it never needs the credential-store scan.
+    if (args[1] === "--reap") {
+      const result = reapStaleEngines(args.slice(2), options.doctor ?? {})
+      console.log(result.lines.join("\n"))
+      process.exitCode = result.failed ? 1 : 0
+      return true
+    }
     const inventory = await detectHarnesses()
     if (compiledPackageRoot) runCompiledDoctor(inventory, compiledPackageRoot, enginePin)
-    else runDoctor(inventory)
+    else runDoctor(inventory, args.slice(1), options.doctor ?? {})
     return true
   }
   if (command === "setup") {

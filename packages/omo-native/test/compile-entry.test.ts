@@ -433,3 +433,52 @@ describe("compiled setup dispatch", () => {
     expect(received).toEqual([flags])
   })
 })
+
+describe("compiled doctor --reap dispatch", () => {
+  const engine = (pid: number, ppid: number) => ({
+    pid, ppid, elapsed: "01:02", tty: "ttys001",
+    command: `node /tmp/omo/node_modules/@code-yeongyu/senpi/dist/cli.js --extension /tmp/omo/plugin`,
+  })
+
+  async function reap(args: string[], list: () => unknown[]) {
+    const root = temp()
+    writeFileSync(join(root, "package.json"), JSON.stringify({ version: "9.2.1" }))
+    const output: string[] = []
+    const signaled: number[] = []
+    const originalLog = console.log
+    const originalExitCode = process.exitCode
+    console.log = (value?: unknown) => { output.push(String(value)) }
+    process.exitCode = undefined
+    let exitCode: unknown
+    try {
+      await runCompiledLauncher(["doctor", "--reap", ...args], root, "2026.8.28", root, {
+        doctor: { list, kill: (pid) => { signaled.push(pid) } },
+      })
+      exitCode = process.exitCode
+    } finally {
+      console.log = originalLog
+      process.exitCode = originalExitCode
+    }
+    return { output: output.join("\n"), signaled, exitCode }
+  }
+
+  test("#given a stale interactive engine #when doctor --reap names it #then the compiled entry signals exactly that pid", async () => {
+    // given / when
+    const result = await reap(["75183"], () => [engine(75183, 1), engine(90387, 4242)])
+
+    // then
+    expect(result.signaled).toEqual([75183])
+    expect(result.output).toContain("PASS reaped stale engine pid 75183")
+    expect(result.exitCode).toBe(0)
+  })
+
+  test("#given a live session engine #when doctor --reap names it #then the compiled entry refuses and fails", async () => {
+    // given / when
+    const result = await reap(["90387"], () => [engine(90387, 4242)])
+
+    // then
+    expect(result.signaled).toEqual([])
+    expect(result.output).toContain("FAIL refusing pid 90387")
+    expect(result.exitCode).toBe(1)
+  })
+})
