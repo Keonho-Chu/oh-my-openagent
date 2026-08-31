@@ -482,3 +482,14 @@ describe("compiled doctor --reap dispatch", () => {
     expect(result.exitCode).toBe(1)
   })
 })
+
+describe("compiled setup data dependencies", () => {
+  test("#given the setup import module #when scanned #then it reads no sibling file through import.meta.url, which the compiled binary cannot serve", () => {
+    // given
+    const source = readFileSync(new URL("../bin/lib/setup-import.js", import.meta.url), "utf8")
+
+    // then
+    expect(source).not.toContain("import.meta.url")
+    expect(source).toMatch(/from "\.\/provider-map\.json" with \{ type: "json" \}/)
+  })
+})
