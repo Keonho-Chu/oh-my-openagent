@@ -6,6 +6,8 @@ import { join } from "node:path"
 import {
   answerCompiledFastPath,
   buildSenpiArgs,
+  toolkitSpawnTarget,
+  type ToolkitSpawnTarget,
   remapSenpiEnvironment,
   runCompiledLauncher,
   shouldPrintCompiledBanner,
@@ -333,5 +335,80 @@ describe("embedded runtime provisioning", () => {
     writeFileSync(join(runtime, "package.json"), "changed\n")
     await provisionEmbeddedRuntime(manifest, embedded, runtime)
     expect(readFileSync(join(runtime, "package.json"), "utf8")).toBe("changed\n")
+  })
+})
+
+describe("compiled ulw-loop dispatch", () => {
+  describe("#given the compiled entry, whose process.execPath is omo itself", () => {
+    test("#when ulw-loop is requested #then it runs through the staged toolkit shim, not process.execPath", async () => {
+      // given
+      const root = temp()
+      writeFileSync(join(root, "package.json"), JSON.stringify({ version: "9.2.1" }))
+      const spawned: ToolkitSpawnTarget[] = []
+      const originalExitCode = process.exitCode
+      process.exitCode = undefined
+
+      // when
+      try {
+        await runCompiledLauncher(["ulw-loop", "status", "--json"], root, "2026.8.28", root, {
+          spawnToolkit: async (target) => { spawned.push(target); return { status: 0, signal: null } },
+        })
+      } finally {
+        process.exitCode = originalExitCode
+      }
+
+      // then
+      expect(spawned).toEqual([{
+        command: join(root, "plugin", "runtime", "agent-toolkit", "omo-agent-toolkit"),
+        args: ["ulw-loop", "status", "--json"],
+      }])
+      expect(spawned[0]?.command).not.toBe(process.execPath)
+    })
+
+    test("#when the child is still running #then the launcher stays unsettled and propagates the status the child later exits with", async () => {
+      // given - a child whose completion this test controls explicitly; no timers involved
+      const root = temp()
+      writeFileSync(join(root, "package.json"), JSON.stringify({ version: "9.2.1" }))
+      let resolveChild!: (result: { status: number | null; signal: null }) => void
+      const child = new Promise<{ status: number | null; signal: null }>((resolvePromise) => {
+        resolveChild = resolvePromise
+      })
+      const originalExitCode = process.exitCode
+      process.exitCode = undefined
+
+      // when
+      try {
+        const launcher = runCompiledLauncher(["ulw-loop", "status"], root, "2026.8.28", root, {
+          spawnToolkit: () => child,
+        })
+        let launcherSettled = false
+        void launcher.then(() => { launcherSettled = true })
+        // Drain the microtask queue: were the launcher not awaiting the child, it would settle here.
+        for (let flush = 0; flush < 10; flush += 1) await Promise.resolve()
+
+        // then - unsettled while the child runs, and the child's status arrives once it exits
+        expect(launcherSettled).toBe(false)
+        resolveChild({ status: 3, signal: null })
+        await launcher
+        const exitCodeAfterChild: unknown = process.exitCode
+        expect(exitCodeAfterChild).toBe(3)
+      } finally {
+        process.exitCode = originalExitCode
+      }
+    })
+  })
+
+  test("#given win32 #when building the toolkit target #then the .cmd shim is invoked through cmd.exe", () => {
+    // given
+    const execDir = "C:\\omo\\runtime"
+
+    // when
+    const target = toolkitSpawnTarget(execDir, ["ulw-loop", "status"], "win32")
+
+    // then
+    expect(target.command).toBe("cmd.exe")
+    expect(target.args.slice(0, 3)).toEqual(["/d", "/s", "/c"])
+    expect(target.args[3]).toMatch(/omo-agent-toolkit\.cmd$/)
+    expect(target.args.slice(4)).toEqual(["ulw-loop", "status"])
   })
 })
