@@ -20,7 +20,7 @@ import { propagateResult, runChild } from "./bin/lib/child-process.js"
 import { nearestNodeBin, readJson } from "./bin/lib/package-paths.js"
 import { runDoctor } from "./bin/lib/doctor.js"
 import { detectHarnesses, needsSetupSuggestion } from "./bin/lib/setup-detect.js"
-import { printSetupReport } from "./bin/lib/setup-report.js"
+import { runSetup } from "./bin/lib/setup-import.js"
 import { delimiter } from "node:path"
 import { registerBunOAuthFlows } from "../../node_modules/@code-yeongyu/senpi/node_modules/@earendil-works/pi-ai/dist/bun-oauth.js"
 
@@ -128,6 +128,7 @@ export type ToolkitSpawnTarget = { command: string; args: string[] }
 export type ChildResult = { status: number | null; signal: NodeJS.Signals | null }
 export interface CompiledLauncherOptions {
   spawnToolkit?: (target: ToolkitSpawnTarget) => Promise<ChildResult>
+  runSetup?: (args: string[]) => Promise<void>
 }
 
 // The compiled binary is not a JS runtime: under `bun build --compile`, `process.execPath` names omo
@@ -196,7 +197,11 @@ export async function runCompiledLauncher(
     else runDoctor(inventory)
     return true
   }
-  if (command === "setup") { printSetupReport(await detectHarnesses()); process.exitCode = 0; return true }
+  if (command === "setup") {
+    // Same consent-gated import the npm launcher runs: report, model hints, plan, then auth.json.
+    await (options.runSetup ?? runSetup)(args.slice(1))
+    return true
+  }
   if ((command === "--version" || command === "-v") && args.length === 1) { console.log(versionLine(packageJson, enginePin ?? "unknown")); return true }
   if (isSelfUpdate(args)) { console.log(updateLine(process.platform, process.arch)); return true }
   return false

@@ -412,3 +412,24 @@ describe("compiled ulw-loop dispatch", () => {
     expect(target.args.slice(4)).toEqual(["ulw-loop", "status"])
   })
 })
+
+describe("compiled setup dispatch", () => {
+  test.each<{ flags: string[] }>([
+    { flags: ["--yes"] },
+    { flags: ["--dry-run"] },
+  ])("#given omo setup $flags #when dispatched #then the consent-gated import runs with those flags", async ({ flags }) => {
+    // given
+    const root = temp()
+    writeFileSync(join(root, "package.json"), JSON.stringify({ version: "9.2.1" }))
+    const received: string[][] = []
+
+    // when
+    const handled = await runCompiledLauncher(["setup", ...flags], root, "2026.8.28", root, {
+      runSetup: async (args) => { received.push(args) },
+    })
+
+    // then
+    expect(handled).toBe(true)
+    expect(received).toEqual([flags])
+  })
+})
